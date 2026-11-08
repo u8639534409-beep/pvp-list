@@ -24,6 +24,8 @@ public final class KillData {
     }
 
     public static final long EXPIRE_MS = 60L * 60L * 1000L;
+    /** Znacznik wpisu dodanego recznie. */
+    public static final String MANUAL = "(reczny wpis)";
 
     public record Entry(String name, long time, BlockPos pos, String dim, String weapon) {
     }
@@ -96,6 +98,36 @@ public final class KillData {
         SkinTextures cached = skins.get(key(name));
         if (cached != null) return cached;
         return DefaultSkinHelper.getSkinTextures(Uuids.getOfflinePlayerUuid(name));
+    }
+
+    /** Dodaje gracza na blackliste recznie. Zwraca false, gdy to Ty sam. */
+    public static boolean addManual(String name) {
+        MinecraftClient c = MinecraftClient.getInstance();
+        if (c.player == null || c.world == null) return false;
+        if (name.equalsIgnoreCase(c.player.getName().getString())) return false;
+
+        String dim = c.world.getRegistryKey().getValue().getPath();
+        long now = System.currentTimeMillis();
+        BlockPos pos = c.player.getBlockPos();
+
+        for (net.minecraft.client.network.AbstractClientPlayerEntity p : c.world.getPlayers()) {
+            if (p != c.player && p.getName().getString().equalsIgnoreCase(name)) {
+                pos = p.getBlockPos();
+                lastSeen.put(key(name), new Seen(p.getPos().add(0, p.getHeight() / 2, 0), dim, now));
+                break;
+            }
+        }
+        deaths.add(new Entry(name, now, pos, dim, MANUAL));
+        skinOf(name);
+        return true;
+    }
+
+    /** Usuwa gracza z blacklisty razem z tracerem. */
+    public static void remove(String name) {
+        String k = key(name);
+        deaths.removeIf(e -> key(e.name()).equals(k));
+        tracers.remove(k);
+        lastSeen.remove(k);
     }
 
     public static void toggleTracer(String name) {
