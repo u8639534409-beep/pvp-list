@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.util.DefaultSkinHelper;
 import net.minecraft.client.util.SkinTextures;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.Uuids;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
@@ -24,6 +25,8 @@ public final class KillData {
     }
 
     public static final long EXPIRE_MS = 60L * 60L * 1000L;
+    /** Znacznik wpisu dodanego recznie. */
+    public static final String MANUAL = "(reczny wpis)";
 
     public record Entry(String name, long time, BlockPos pos, String dim, String weapon) {
     }
@@ -34,6 +37,11 @@ public final class KillData {
     public record BlackRow(String name, int count, Entry latest) {
     }
 
+    /** Migawka wyposazenia gracza (serca, zbroja, przedmiot w rece). */
+    public record Info(float hearts, float absorption, ItemStack hand,
+                       ItemStack head, ItemStack chest, ItemStack legs, ItemStack feet, long time) {
+    }
+
     /** Zabojstwa Ciebie (kto Cie zabil). */
     public static final List<Entry> deaths = new ArrayList<>();
     /** Twoje fragi. */
@@ -42,6 +50,8 @@ public final class KillData {
     public static final Set<String> tracers = new HashSet<>();
     /** Ostatnia znana pozycja sledzonych graczy. */
     public static final Map<String, Seen> lastSeen = new HashMap<>();
+    /** Ostatnio widziane wyposazenie sledzonych graczy. */
+    public static final Map<String, Info> lastInfo = new HashMap<>();
 
     private static final Map<String, SkinTextures> skins = new HashMap<>();
 
@@ -58,6 +68,7 @@ public final class KillData {
         for (Entry e : deaths) alive.add(key(e.name()));
         tracers.retainAll(alive);
         lastSeen.keySet().retainAll(alive);
+        lastInfo.keySet().retainAll(alive);
     }
 
     /** Blacklista: jeden wiersz na gracza, najnowsze na gorze. */
@@ -96,6 +107,63 @@ public final class KillData {
         SkinTextures cached = skins.get(key(name));
         if (cached != null) return cached;
         return DefaultSkinHelper.getSkinTextures(Uuids.getOfflinePlayerUuid(name));
+    }
+
+    /** Dodaje gracza na blackliste recznie. Zwraca false, gdy to Ty sam. */
+    public static boolean addManual(String name) {
+        MinecraftClient c = MinecraftClient.getInstance();
+        if (c.player == null || c.world == null) return false;
+        if (name.equalsIgnoreCase(c.player.getName().getString())) return false;
+
+        String dim = c.world.getRegistryKey().getValue().getPath();
+        long now = System.currentTimeMillis();
+        BlockPos pos = c.player.getBlockPos();
+
+        for (net.minecraft.client.network.AbstractClientPlayerEntity p : c.world.getPlayers()) {
+            if (p != c.player && p.getName().getString().equalsIgnoreCase(name)) {
+                pos = p.getBlockPos();
+                lastSeen.put(key(name), new Seen(p.getPos().add(0, p.getHeight() / 2, 0), dim, now));
+                break;
+            }
+        }
+        deaths.add(new Entry(name, now, pos, dim, MANUAL));
+        skinOf(name);
+        return true;
+    }
+
+    /** Usuwa gracza z blacklisty razem z tracerem. */
+    public static void remove(String name) {
+        String k = key(name);
+        deaths.removeIf(e -> key(e.name()).equals(k));
+        tracers.remove(k);
+        lastSeen.remove(k);
+        lastInfo.remove(k);
+    }
+
+    /** Dodaje zabojstwo Ciebie; false gdy to duplikat (ta sama wiadomosc dwa razy). */
+    public static boolean addDeath(String name, BlockPos pos, String dim, String weapon) {
+        long now = System.currentTimeMillis();
+        for (Entry e : deaths) {
+            if (key(e.name()).equals(key(name)) && now - e.time() < 5_000L) return false;
+        }
+        deaths.add(new Entry(name, now, pos, dim, weapon));
+        skinOf(name);
+        return true;
+    }
+
+    /** Dodaje Twoj frag; false gdy ten sam gracz zostal juz zapisany przed chwila. */
+    public static boolean addKill(String name, BlockPos pos, String dim, String weapon) {
+        long now = System.currentTimeMillis();
+        for (Entry e : kills) {
+            if (key(e.name()).equals(key(name)) && now - e.time() < 10_000L) return false;
+        }
+        kills.add(new Entry(name, now, pos, dim, weapon));
+        skinOf(name);
+        return true;
+    }
+
+    public static void removeKill(Entry entry) {
+        kills.remove(entry);
     }
 
     public static void toggleTracer(String name) {

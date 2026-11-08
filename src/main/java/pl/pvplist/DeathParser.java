@@ -57,8 +57,7 @@ public final class DeathParser {
 
         if (meVictim) {
             BlockPos pos = c.player.getBlockPos();
-            KillData.deaths.add(new KillData.Entry(killer, now, pos, dim, weapon));
-            KillData.skinOf(killer);
+            if (!KillData.addDeath(killer, pos, dim, weapon)) return;
             rememberPosition(c, killer, dim, now);
             c.player.sendMessage(Text.literal("[PvpList] " + killer + " Cie zabil - dodany na blackliste.")
                     .formatted(Formatting.RED), false);
@@ -66,8 +65,7 @@ public final class DeathParser {
             BlockPos pos = c.player.getBlockPos();
             AbstractClientPlayerEntity v = findPlayer(c, victim);
             if (v != null) pos = v.getBlockPos();
-            KillData.kills.add(new KillData.Entry(victim, now, pos, dim, weapon));
-            KillData.skinOf(victim);
+            if (!KillData.addKill(victim, pos, dim, weapon)) return;
             c.player.sendMessage(Text.literal("[PvpList] Frag: " + victim).formatted(Formatting.GREEN), true);
         }
     }
