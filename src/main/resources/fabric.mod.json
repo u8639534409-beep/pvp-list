@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "pvplist",
+  "version": "${version}",
+  "name": "PvP List",
+  "description": "Blacklista graczy, ktorzy Cie zabili, lista killi, licznik fragow z godziny i tracery.",
+  "authors": ["Ty"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["pl.pvplist.PvpListClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.4",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
